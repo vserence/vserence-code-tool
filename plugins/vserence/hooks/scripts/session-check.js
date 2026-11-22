@@ -49,6 +49,17 @@ function main() {
     }
   }
 
+  const pending = L.readPending(dir);
+  if (pending && pending.skipped_warning) {
+    lines.push('vserence ПРЕДУПРЕЖДЕНИЕ: ' + pending.skipped_warning + ' Сообщи об этом пользователю первой строкой ' +
+      'и доведи задачу по конвейеру: результат прошлой сессии не проверен.');
+    delete pending.skipped_warning;
+    L.writePending(dir, pending);
+  } else if (pending && !pending.question_turn && !(task && task.state.status === 'in_progress')) {
+    lines.push('vserence: последнее сообщение-задача не прошло конвейер (флаг ожидания стоит). Правки кода и остановка ' +
+      'заблокированы, пока задача не запущена через vserence:router и `start`.');
+  }
+
   if (lines.length === 0) return; // silent when everything is in order
   L.emit({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: lines.join('\n') } });
 }

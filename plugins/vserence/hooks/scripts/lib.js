@@ -311,6 +311,48 @@ function frontmatter(text) {
   return fm;
 }
 
+// ---- Pending flag: a task message arrived and the pipeline has not finished it yet ----
+// Lives in the git dir (never committed) or, without git, in os.tmpdir() keyed by project path.
+function pendingPath(dir) {
+  const gd = git(dir, ['rev-parse', '--git-dir']);
+  if (gd && gd.trim()) return path.join(path.resolve(dir, gd.trim()), 'vserence-pending.json');
+  const key = require('node:crypto').createHash('sha1').update(path.resolve(dir)).digest('hex').slice(0, 16);
+  return path.join(os.tmpdir(), 'vserence-pending-' + key + '.json');
+}
+
+function readPending(dir) {
+  const p = readJson(pendingPath(dir));
+  return p && typeof p === 'object' ? p : null;
+}
+
+function writePending(dir, obj) {
+  writeJson(pendingPath(dir), obj);
+}
+
+function clearPending(dir) {
+  try {
+    fs.unlinkSync(pendingPath(dir));
+  } catch {
+    // already absent
+  }
+}
+
+function hasChecks(dir) {
+  return exists(path.join(vserenceDir(dir), 'checks.json'));
+}
+
+// Files that onboarding/sync may write before a task exists.
+function isContractFile(dir, file) {
+  const rel = relToProject(dir, file);
+  if (rel == null || rel.startsWith('..')) return false;
+  if (rel.startsWith('.vserence/')) return true;
+  if (['AGENTS.md', 'CLAUDE.md', 'CLAUDE.local.md', '.gitignore', '.claude/settings.json',
+    '.claude/settings.local.json'].includes(rel)) return true;
+  if (rel.startsWith('.claude/rules/') && rel.endsWith('.md')) return true; // path-scoped rules
+  if (/(^|\/)AGENTS\.md$/.test(rel)) return true; // <module>/AGENTS.md
+  return false;
+}
+
 function emit(obj) {
   process.stdout.write(JSON.stringify(obj));
 }
@@ -322,4 +364,5 @@ module.exports = {
   vserenceDir, taskDir, statePath, activeTask, saveState, loadChecks, checkCommand, fillCommand,
   runCommand, tail, toPosix, relToProject, matchesGlob, isSecretPath, isTestPath, isInside,
   secretGlobs, testGlobs, markdownSection, conventions, estimateTokens, frontmatter, emit,
+  pendingPath, readPending, writePending, clearPending, hasChecks, isContractFile,
 };

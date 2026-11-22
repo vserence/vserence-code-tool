@@ -285,6 +285,46 @@ function bashTouchesTests(dir, cmd) {
   return null;
 }
 
+// ---- Pre-task mode: a task message arrived (pending flag) but no task is in progress ----
+function preTaskReason(dir) {
+  const contract = L.hasChecks(dir);
+  return 'сначала ' + (contract ? '' : '(1) онбординг — скилл vserence:onboarding, потому что нет .vserence/checks.json; ') +
+    `${contract ? '(1)' : '(2)'} скилл vserence:router и \`node "${L.STATE_SCRIPT}" start <имя> <режим>\`. ` +
+    'Пропускать конвейер нельзя, даже для маленькой правки. ' +
+    (contract ? 'До start разрешены чтение, поиск, git status/log/diff, команды из checks.json и файлы контракта.'
+      : 'Пока нет .vserence/checks.json, разрешены только файлы контракта и онбординга (.vserence/, AGENTS.md, CLAUDE.md, CLAUDE.local.md, .claude/settings*.json, .claude/rules/, .gitignore).');
+}
+
+const READ_GIT = new Set(['status', 'log', 'diff', 'show', 'grep', 'blame', 'shortlog', 'fetch', 'rev-parse',
+  'ls-files', 'ls-tree', 'cat-file', 'describe', 'remote', 'reflog', 'check-ignore', 'merge-base', 'tag']);
+const MODIFY_CMD = /(^|\s)(touch|mkdir|rmdir|ln|chmod|chown|patch|unzip|install|rsync|curl\s+.*-o|wget)\b|\btar\s+-?[a-zA-Z]*x|\b(npm|yarn|pnpm|bun)\s+(install|i|ci|add|remove|uninstall|update|upgrade|run\s+(format|fix|lint:fix))\b|\b(pip3?|uv\s+pip|poetry|pipenv)\s+(install|add|remove|uninstall|lock)\b|\b(go\s+(get|mod\s+tidy)|cargo\s+(add|remove|update)|bundle\s+(install|update)|composer\s+(install|require|update))\b|\b(writeFile|appendFile|write_text|write_bytes|unlink|rmSync|renameSync|mkdirSync)\b|\bopen\([^)]*["'][wax]\+?["']/;
+
+function bashModifies(dir, cmd) {
+  if (/vserence-state\.js/.test(cmd)) return null;
+  if (isProjectCheck(dir, cmd)) return null;
+  const noRedir = cmd.replace(/\d*>&\d/g, ' ').replace(/&>\s*(\/dev\/null|nul)\b/gi, ' ')
+    .replace(/\d*>\s*(\/dev\/null|nul)\b/gi, ' ');
+  for (const seg of splitSegments(noRedir)) {
+    const toks = tokenize(seg);
+    if (!toks.length) continue;
+    if (toks[0] === 'git') {
+      let i = 1;
+      while (i < toks.length && toks[i].startsWith('-')) i += (toks[i] === '-C' || toks[i] === '-c') ? 2 : 1;
+      const sub = toks[i];
+      const args = toks.slice(i + 1);
+      if (READ_GIT.has(sub)) continue;
+      if (sub === 'branch' && !args.some((a) => /^-[a-zA-Z]*[dDmMcC]|^--(delete|move|copy)/.test(a))) continue;
+      if ((sub === 'checkout' || sub === 'switch') && !args.includes('--') &&
+        args.filter((a) => !a.startsWith('-')).length <= 1 &&
+        !args.some((a) => !a.startsWith('-') && L.exists(L.path.resolve(dir, a)) && !L.fs.statSync(L.path.resolve(dir, a)).isDirectory())) continue;
+      if (sub === 'pull' && args.includes('--ff-only')) continue;
+      return `git ${sub || ''}`.trim();
+    }
+    if (WRITE_OPS.test(seg) || MODIFY_CMD.test(seg)) return seg.slice(0, 80);
+  }
+  return null;
+}
+
 function fileOf(ti) {
   return ti.file_path || ti.notebook_path || ti.path || null;
 }
@@ -298,6 +338,7 @@ function main() {
   const task = L.isGitRepo(dir) ? L.activeTask(dir) : null;
   const st = task && task.state.status === 'in_progress' ? task.state : null;
   const taskRel = task ? '.vserence/tasks/' + task.name + '/' : null;
+  const preTask = !st && !!L.readPending(dir);
 
   if (tool === 'Read') {
     const f = fileOf(ti);
@@ -317,6 +358,7 @@ function main() {
     if (L.isSecretPath(dir, abs)) deny(`правка файла секретов «${rel}» запрещена (список «Файлы секретов»). Укажи в отчёте, что и где нужно поменять человеку.`);
     if (/^\.vserence\/tasks\/[^/]+\/state\.json$/.test(rel)) deny('state.json меняется только скриптом: node "' + L.STATE_SCRIPT + '" <команда>.');
     if (who === 'explorer') deny('explorer только читает.');
+    if (preTask && !L.isContractFile(dir, abs)) deny(preTaskReason(dir) + ` Заблокирована правка «${rel}».`);
     if (!st) return;
     const inTask = rel.startsWith(taskRel);
     const inAcceptance = rel.startsWith(taskRel + 'acceptance/');
@@ -351,6 +393,10 @@ function main() {
     if (d) deny(`опасная команда (${d}) заблокирована. Такие действия выполняет человек; опиши в отчёте, что нужно сделать.`);
     const s = secretInCommand(dir, cmd);
     if (s) deny(`команда обращается к файлу секретов «${s}». Содержимое секретов не должно попадать в вывод, отчёт и коммиты. Для .gitignore используй Edit.`);
+    if (preTask) {
+      const m = bashModifies(dir, cmd);
+      if (m) deny(preTaskReason(dir) + ` Заблокирована команда, меняющая файлы или историю: «${m}».`);
+    }
     const ga = gitAddSecrets(dir, cmd);
     if (ga) deny(`git add/commit захватит файлы секретов: ${ga}. Добавь их в .gitignore или добавляй файлы поимённо.`);
     if (/state\.json/.test(cmd) && !/vserence-state\.js/.test(cmd) && !/^\s*(cat|type|git\s+(diff|show|log))\b/.test(cmd)) {

@@ -99,22 +99,76 @@ function block(reason) {
   process.exit(0);
 }
 
+const MAX_IDLE_BLOCKS = 3;
+
+// Progress = something observable changed since the previous block: contract, task, stage, counters, files.
+function progressSig(dir, task) {
+  const porcelain = L.isGitRepo(dir) ? (L.git(dir, ['status', '--porcelain']) || '') : '';
+  const s = task ? task.state : {};
+  return require('node:crypto').createHash('sha1').update(JSON.stringify([
+    L.hasChecks(dir), task && task.name, s.stage, s.status, s.check_cycles, s.review_cycles, porcelain,
+  ])).digest('hex').slice(0, 16);
+}
+
+// Pipeline-incomplete block, limited to MAX_IDLE_BLOCKS consecutive blocks without progress.
+// After the limit the stop is let through and a warning is left for the next SessionStart.
+function guardedBlock(dir, pending, task, reason) {
+  if (pending) {
+    const sig = progressSig(dir, task);
+    if (pending.last_sig !== sig) pending.stop_blocks = 0;
+    pending.last_sig = sig;
+    if ((pending.stop_blocks || 0) >= MAX_IDLE_BLOCKS) {
+      pending.stop_blocks = 0;
+      pending.skipped_warning = `Stop-ворота пропустили остановку после ${MAX_IDLE_BLOCKS} блокировок подряд без прогресса ` +
+        `(${new Date().toISOString()}). Конвейер не пройден: ${reason.replace(/^vserence stop-gate: /, '')}`;
+      L.writePending(dir, pending);
+      L.emit({ systemMessage: 'vserence: конвейер не пройден, остановка пропущена после ' + MAX_IDLE_BLOCKS +
+        ' блокировок без прогресса. Результат не проверен.' });
+      process.exit(0);
+    }
+    pending.stop_blocks = (pending.stop_blocks || 0) + 1;
+    L.writePending(dir, pending);
+  }
+  block(reason + (pending ? ` (блокировка ${pending.stop_blocks} из ${MAX_IDLE_BLOCKS} без прогресса)` : ''));
+}
+
 function main() {
   const input = L.parseInput();
   const dir = L.projectDir(input);
-  if (!L.isGitRepo(dir)) return;
+  const isGit = L.isGitRepo(dir);
+  const pending = L.readPending(dir);
+  if (pending && (pending.question_turn || pending.awaiting_user)) return; // question or waiting for the user
+  let task = isGit ? L.activeTask(dir) : null;
+  if (task && pending && pending.task !== task.name) task = null; // old task branch, new message not started
+
+  if (pending && !task) {
+    const steps = [];
+    if (!isGit) steps.push('папка не git-репозиторий: спроси пользователя про `git init` (`node "' + L.STATE_SCRIPT + '" ask`)');
+    if (!L.hasChecks(dir)) steps.push('онбординг (скилл vserence:onboarding): контракта .vserence/checks.json нет');
+    steps.push('скилл vserence:router и `node "' + L.STATE_SCRIPT + '" start <имя> <режим>`');
+    steps.push('этапы режима, ревью и отчёт .vserence/tasks/<имя>/report.md');
+    guardedBlock(dir, pending, null, 'vserence stop-gate: сообщение-задача не прошло конвейер. Нужно: ' +
+      steps.map((x, i) => `(${i + 1}) ${x}`).join('; ') + '. Пропускать конвейер нельзя, даже для маленькой правки. ' +
+      'Если нужен ответ пользователя — задай вопрос и выполни `ask`.');
+  }
+  if (!isGit || !task) return;
   const checks = L.loadChecks(dir);
-  if (!checks) return;
-  const task = L.activeTask(dir);
-  if (!task) return;
   const s = task.state;
   const td0 = '.vserence/tasks/' + task.name + '/';
-  if (s.status === 'incomplete' && !L.exists(L.path.join(dir, td0, 'report.md'))) {
-    block(`vserence stop-gate: задача «${task.name}» остановлена (${s.incomplete_reason || 'не завершено'}). ` +
+  const reportExists = L.exists(L.path.join(dir, td0, 'report.md'));
+  if (s.status === 'incomplete' && !reportExists) {
+    guardedBlock(dir, pending, task, `vserence stop-gate: задача «${task.name}» остановлена (${s.incomplete_reason || 'не завершено'}). ` +
       `Выпусти отчёт ${td0}report.md по скиллу vserence:report со статусом «не завершено» и списком открытых проблем.`);
   }
-  if (s.status !== 'in_progress') return;
+  if (s.status !== 'in_progress') {
+    if (reportExists) L.clearPending(dir);
+    return;
+  }
   if (s.awaiting_user) return; // the only mandatory stop: a question to the user
+  if (!checks) {
+    guardedBlock(dir, pending, task, 'vserence stop-gate: нет .vserence/checks.json — онбординг не завершён. ' +
+      'Выполни скилл vserence:onboarding, затем продолжи задачу.');
+  }
   const base = s.base_sha || s.base_branch;
   if (!base) return;
   const td = '.vserence/tasks/' + task.name + '/';
@@ -122,18 +176,23 @@ function main() {
 
   if (s.mode === 'investigate') {
     if (files.length) {
-      block(`vserence stop-gate: режим investigate запрещает правки кода, а изменены: ${files.map((f) => f.file).join(', ')}. ` +
+      guardedBlock(dir, pending, task, `vserence stop-gate: режим investigate запрещает правки кода, а изменены: ${files.map((f) => f.file).join(', ')}. ` +
         'Откати их (git checkout -- <файл> / удали новые файлы) и запиши выводы в ' + td + 'report.md.');
     }
     if (s.stage !== 'done' && !L.exists(L.path.join(dir, td, 'report.md'))) {
-      block('vserence stop-gate: результат investigate не записан: создай ' + td + 'report.md (гипотезы по убыванию ' +
+      guardedBlock(dir, pending, task, 'vserence stop-gate: результат investigate не записан: создай ' + td + 'report.md (гипотезы по убыванию ' +
         'вероятности, доказательство и способ проверки каждой, следующая задача с режимом) и выполни done.');
     }
+    L.clearPending(dir); // report.md written
     return;
   }
 
-  // Nothing changed in code yet (spec/plan stages): nothing to check.
-  if (files.length === 0 && ['spec', 'plan'].includes(s.stage)) return;
+  // Nothing changed in code yet (spec/plan stages): nothing to check, but the pipeline is not finished.
+  if (files.length === 0 && ['spec', 'plan'].includes(s.stage)) {
+    if (!pending) return;
+    guardedBlock(dir, pending, task, `vserence stop-gate: задача «${task.name}» на этапе ${s.stage}: ` +
+      'допиши spec.md/plan.md и продолжай конвейер; остановка только для вопроса пользователю (`ask`).');
+  }
 
   const red = [];
   const notes = [];
@@ -182,9 +241,12 @@ function main() {
     review: 'ревьюер (сабагент vserence:reviewer) и его вердикт, затем stage report',
     report: 'отчёт ' + td + 'report.md по скиллу vserence:report, коммит, затем done',
   };
-  if (s.stage === 'report' && L.exists(report)) return; // report written: allow stop
+  if (s.stage === 'report' && L.exists(report)) { // report written: allow stop, drop the flag
+    L.clearPending(dir);
+    return;
+  }
   if (remaining[s.stage]) {
-    block(`vserence stop-gate: проверки зелёные${notes.length ? ' (' + notes.join('; ') + ')' : ''}. ` +
+    guardedBlock(dir, pending, task, `vserence stop-gate: проверки зелёные${notes.length ? ' (' + notes.join('; ') + ')' : ''}. ` +
       `Задача «${task.name}» не завершена, этап ${s.stage}. Осталось: ${remaining[s.stage]}.`);
   }
 }

@@ -54,8 +54,16 @@ function main() {
       if (!name || !/^[a-z0-9][a-z0-9-]{0,39}$/.test(name)) fail('имя задачи: kebab-case, латиница, до 40 символов');
       if (!L.MODES.includes(mode)) fail('режим: ' + L.MODES.join('|'));
       if (!L.isGitRepo(dir)) fail('не git-репозиторий');
-      const base = L.currentBranch(dir);
-      if (base && base.startsWith('vserence/')) fail(`уже на ветке задачи ${base}; сначала вернись на основную ветку`);
+      let base = L.currentBranch(dir);
+      if (base && base.startsWith('vserence/')) {
+        const prev = L.activeTask(dir);
+        if (prev && prev.state.status === 'in_progress') {
+          fail(`на ветке незавершённой задачи ${base}; закончи её (report + done) или остановись (incomplete)`);
+        }
+        const back = (prev && prev.state.base_branch) || null;
+        if (!back || L.git(dir, ['checkout', back]) == null) fail(`на ветке задачи ${base}; не удалось вернуться на основную ветку`);
+        base = back;
+      }
       const baseSha = (L.git(dir, ['rev-parse', 'HEAD']) || '').trim() || null;
       const branch = 'vserence/' + name;
       const existsBranch = L.git(dir, ['rev-parse', '--verify', '--quiet', branch]) != null;
@@ -78,6 +86,9 @@ function main() {
       };
       const task = { name, path: L.statePath(dir, name), state };
       L.saveState(task);
+      const p = L.readPending(dir) || { at: new Date().toISOString() };
+      Object.assign(p, { task: name, stop_blocks: 0, awaiting_user: false, contract_present: L.hasChecks(dir) });
+      L.writePending(dir, p);
       ok(state);
       break;
     }
@@ -113,10 +124,19 @@ function main() {
       break;
     }
     case 'ask': {
-      const t = requireTask(dir);
-      t.state.awaiting_user = true;
-      L.saveState(t);
-      ok(t.state);
+      // Works before `start` too (e.g. question about git init or an ambiguous object of change).
+      const t = L.isGitRepo(dir) ? L.activeTask(dir) : null;
+      const p = L.readPending(dir);
+      if (p) {
+        p.awaiting_user = true;
+        L.writePending(dir, p);
+      }
+      if (t) {
+        t.state.awaiting_user = true;
+        L.saveState(t);
+        ok(t.state);
+      }
+      ok({ awaiting_user: true, pending: !!p });
       break;
     }
     case 'review-fail': {
@@ -152,6 +172,7 @@ function main() {
       if (t.state.status === 'in_progress') t.state.status = 'done';
       t.state.stage = 'done';
       L.saveState(t);
+      L.clearPending(dir);
       ok(t.state);
       break;
     }

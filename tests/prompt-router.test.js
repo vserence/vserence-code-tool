@@ -19,7 +19,8 @@ test('prompt-router: message starting with "?" bypasses the pipeline', () => {
 test('prompt-router: plain task goes to the router', () => {
   const dir = h.makeProject();
   const r = ev(dir, 'Добавь экспорт отчёта в CSV');
-  assert.match(ctx(r), /Вызови скилл vserence:router/);
+  assert.match(ctx(r), /скилл vserence:router/);
+  assert.match(ctx(r), /start <имя> <режим>/);
 });
 
 test('prompt-router: slash command is left alone', () => {
