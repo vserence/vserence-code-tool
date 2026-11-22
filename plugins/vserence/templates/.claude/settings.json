@@ -3,7 +3,7 @@
     "vserence-code-tool": {
       "source": {
         "source": "github",
-        "repo": "OWNER/vserence-code-tool"
+        "repo": "vserence/vserence-code-tool"
       }
     }
   },

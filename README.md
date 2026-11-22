@@ -5,11 +5,11 @@
 ## Установка (две команды, уровень User)
 
 ```
-/plugin marketplace add <OWNER>/vserence-code-tool
+/plugin marketplace add vserence/vserence-code-tool
 /plugin install vserence@vserence-code-tool
 ```
 
-Из терминала то же самое: `claude plugin marketplace add <OWNER>/vserence-code-tool` и `claude plugin install vserence@vserence-code-tool`. Плагин объявляет зависимости `superpowers`, `code-review`, `security-guidance`, `frontend-design`; они ставятся автоматически из этого же маркетплейса.
+Из терминала то же самое: `claude plugin marketplace add vserence/vserence-code-tool` и `claude plugin install vserence@vserence-code-tool`. Плагин объявляет зависимости `superpowers`, `code-review`, `security-guidance`, `frontend-design`; они ставятся автоматически из этого же маркетплейса.
 
 Обновление сборки: push в этот репозиторий → `/plugin marketplace update vserence-code-tool`. SessionStart-хук сравнит версию контракта проекта с версией формата плагина и попросит синхронизацию.
 
@@ -47,7 +47,7 @@ tests/        тесты хуков: npm test  (= node --test "tests/*.test.js")
 ## TODO перед первым распространением
 
 - [ ] **Закрепить коммиты внешних плагинов.** В `.claude-plugin/marketplace.json` у `superpowers`, `code-review`, `security-guidance`, `frontend-design` стоит `metadata.pin_commit_sha: "PIN_COMMIT_SHA"`. Формат требует в `source.sha` полный 40-символьный SHA в нижнем регистре, поэтому плейсхолдер вынесен в `metadata` (иначе `claude plugin validate` падает). После просмотра хуков каждого плагина впиши SHA в `source.sha` и удали `metadata.pin_commit_sha`. Пока SHA не вписан, ставится последний коммит ветки по умолчанию.
-- [ ] Заменить `OWNER` в `plugins/vserence/templates/.claude/settings.json` и в этом README на реальное место репозитория (открытый вопрос спецификации: GitHub или GitLab, личный или организации).
+- [x] Репозиторий: github.com/vserence/vserence-code-tool.
 
 ## Известные ограничения
 
