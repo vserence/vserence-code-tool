@@ -295,34 +295,9 @@ function preTaskReason(dir) {
       : 'Пока нет .vserence/checks.json, разрешены только файлы контракта и онбординга (.vserence/, AGENTS.md, CLAUDE.md, CLAUDE.local.md, .claude/settings*.json, .claude/rules/, .gitignore).');
 }
 
-const READ_GIT = new Set(['status', 'log', 'diff', 'show', 'grep', 'blame', 'shortlog', 'fetch', 'rev-parse',
-  'ls-files', 'ls-tree', 'cat-file', 'describe', 'remote', 'reflog', 'check-ignore', 'merge-base', 'tag']);
-const MODIFY_CMD = /(^|\s)(touch|mkdir|rmdir|ln|chmod|chown|patch|unzip|install|rsync|curl\s+.*-o|wget)\b|\btar\s+-?[a-zA-Z]*x|\b(npm|yarn|pnpm|bun)\s+(install|i|ci|add|remove|uninstall|update|upgrade|run\s+(format|fix|lint:fix))\b|\b(pip3?|uv\s+pip|poetry|pipenv)\s+(install|add|remove|uninstall|lock)\b|\b(go\s+(get|mod\s+tidy)|cargo\s+(add|remove|update)|bundle\s+(install|update)|composer\s+(install|require|update))\b|\b(writeFile|appendFile|write_text|write_bytes|unlink|rmSync|renameSync|mkdirSync)\b|\bopen\([^)]*["'][wax]\+?["']/;
-
+// Segment classifier: blocked only if a segment mutates files outside the paths allowed before start.
 function bashModifies(dir, cmd) {
-  if (/vserence-state\.js/.test(cmd)) return null;
-  if (isProjectCheck(dir, cmd)) return null;
-  const noRedir = cmd.replace(/\d*>&\d/g, ' ').replace(/&>\s*(\/dev\/null|nul)\b/gi, ' ')
-    .replace(/\d*>\s*(\/dev\/null|nul)\b/gi, ' ');
-  for (const seg of splitSegments(noRedir)) {
-    const toks = tokenize(seg);
-    if (!toks.length) continue;
-    if (toks[0] === 'git') {
-      let i = 1;
-      while (i < toks.length && toks[i].startsWith('-')) i += (toks[i] === '-C' || toks[i] === '-c') ? 2 : 1;
-      const sub = toks[i];
-      const args = toks.slice(i + 1);
-      if (READ_GIT.has(sub)) continue;
-      if (sub === 'branch' && !args.some((a) => /^-[a-zA-Z]*[dDmMcC]|^--(delete|move|copy)/.test(a))) continue;
-      if ((sub === 'checkout' || sub === 'switch') && !args.includes('--') &&
-        args.filter((a) => !a.startsWith('-')).length <= 1 &&
-        !args.some((a) => !a.startsWith('-') && L.exists(L.path.resolve(dir, a)) && !L.fs.statSync(L.path.resolve(dir, a)).isDirectory())) continue;
-      if (sub === 'pull' && args.includes('--ff-only')) continue;
-      return `git ${sub || ''}`.trim();
-    }
-    if (WRITE_OPS.test(seg) || MODIFY_CMD.test(seg)) return seg.slice(0, 80);
-  }
-  return null;
+  return require('./bash-classify.js').classify(dir, cmd, (c) => isProjectCheck(dir, c));
 }
 
 function fileOf(ti) {
