@@ -1,7 +1,7 @@
 {
   "name": "vserence",
   "displayName": "vserence-code-tool",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Turns a plain-text task into a verified result in a separate branch and a plain-language report: router and modes, project contract (.vserence/), hooks with checks, risk analysis, independent review.",
   "author": {
     "name": "lumosdev"
