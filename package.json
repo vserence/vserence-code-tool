@@ -1,0 +1,8 @@
+{
+  "name": "vserence-code-tool",
+  "private": true,
+  "description": "Repository of the vserence Claude Code plugin and its marketplace. No dependencies.",
+  "scripts": {
+    "test": "node --test \"tests/*.test.js\""
+  }
+}
