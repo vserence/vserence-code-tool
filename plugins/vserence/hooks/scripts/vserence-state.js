@@ -6,7 +6,7 @@
 // Usage (from the project root):
 //   node vserence-state.js start <task-name> <mode>      create branch vserence/<name> and state
 //   node vserence-state.js stage <stage>                 move forward to a stage
-//   node vserence-state.js escalate <mode> "<reason>"    raise mode (fix -> feature); never lowers
+//   node vserence-state.js escalate <mode> "<reason>"    fix -> feature only with reason "пользователь: …" or "новое поведение: …"; never lowers
 //   node vserence-state.js ask                           mark: waiting for the user's answer
 //   node vserence-state.js review-fail "<summary>"       reviewer returned work (limit 2)
 //   node vserence-state.js incomplete "<reason>"         stop with status "не завершено"
@@ -116,7 +116,12 @@ function main() {
       const t = requireTask(dir);
       if (!L.MODES.includes(a1)) fail('режим: ' + L.MODES.join('|'));
       if (MODE_RANK[a1] <= MODE_RANK[t.state.mode]) fail(`режим не опускается и не меняется вбок: ${t.state.mode} → ${a1}`);
-      if (!a2) fail('нужна причина (какой триггер сработал)');
+      if (!a2) fail('нужна причина: "пользователь: <его слова>" или "новое поведение: <какое>"');
+      if (t.state.mode === 'fix' && !/^\s*(пользователь|новое поведение)\s*:/i.test(a2)) {
+        fail('fix не поднимается по размеру или триггерам (модули, API, схема БД, формат, критичный модуль): ' +
+          'они добавляют risk-analyst в fix. fix → feature только по явной команде пользователя ' +
+          '("пользователь: …") или при новом поведении для пользователя ("новое поведение: …").');
+      }
       t.state.mode = a1;
       t.state.mode_history.push({ mode: a1, at: new Date().toISOString(), reason: a2 });
       // continue at the earliest stage of the new mode that is not done yet

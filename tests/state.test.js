@@ -10,11 +10,16 @@ test('state: start creates branch vserence/<name> and state.json', () => {
   assert.strictEqual(h.git(dir, 'rev-parse', '--abbrev-ref', 'HEAD').trim(), 'vserence/csv-export');
 });
 
-test('state: mode is raised fix -> feature and never lowered', () => {
+test('state: fix is not raised by size/triggers, only by the user or new behaviour; never lowered', () => {
   const dir = h.makeProject();
   h.startTask(dir, 'demo-task', 'fix');
   assert.notStrictEqual(h.state(dir, 'escalate', 'feature').status, 0, 'reason is required');
-  assert.strictEqual(h.state(dir, 'escalate', 'feature', 'затронута схема БД').status, 0);
+  const trig = h.state(dir, 'escalate', 'feature', 'затронута схема БД');
+  assert.notStrictEqual(trig.status, 0, 'triggers add risk-analyst, they do not change the mode');
+  assert.match(trig.stderr, /не поднимается по размеру или триггерам/);
+  assert.strictEqual(h.readState(dir).mode, 'fix');
+  assert.strictEqual(h.state(dir, 'escalate', 'feature', 'новое поведение: экспорт шахматки в CSV').status, 0);
+  assert.strictEqual(h.readState(dir).mode, 'feature');
   const r = h.state(dir, 'escalate', 'fix', 'x');
   assert.notStrictEqual(r.status, 0);
   assert.match(r.stderr, /не опускается/);
@@ -42,4 +47,10 @@ test('state: report only after review; done requires report.md', () => {
   assert.notStrictEqual(h.state(dir, 'done').status, 0);
   h.write(dir, '.vserence/tasks/demo-task/report.md', '#');
   assert.strictEqual(h.state(dir, 'done').status, 0);
+});
+
+test('state: fix -> feature on an explicit user command', () => {
+  const dir = h.makeProject();
+  h.startTask(dir, 'demo-task', 'fix');
+  assert.strictEqual(h.state(dir, 'escalate', 'feature', 'пользователь: сделай это как фичу').status, 0);
 });
