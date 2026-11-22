@@ -43,7 +43,7 @@ function main() {
     hookSpecificOutput: {
       hookEventName: 'UserPromptSubmit',
       additionalContext: 'vserence: это задача. Вызови скилл vserence:router и выполни конвейер по нему ' +
-        '(режим первой строкой). Если в контексте есть инструкция об онбординге или синхронизации, сначала она.',
+        '(режим первой строкой); superpowers:brainstorming не вызывай. Если в контексте есть инструкция об онбординге или синхронизации, сначала она.',
     },
   });
 }
