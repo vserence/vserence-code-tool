@@ -17,6 +17,7 @@ test('session-check: no contract -> onboarding instruction', () => {
 
 test('session-check: fresh contract after snapshot -> silent', () => {
   const dir = h.makeProject();
+  assert.strictEqual(h.state(dir, 'baseline').status, 0);
   assert.strictEqual(h.state(dir, 'snapshot').status, 0);
   const r = h.runScript('session-check.js', { hook_event_name: 'SessionStart', source: 'startup', cwd: dir }, dir);
   assert.strictEqual(r.stdout, '');
@@ -59,4 +60,15 @@ test('session-check: after compaction re-injects the active task from files', ()
   const r = h.runScript('session-check.js', { hook_event_name: 'SessionStart', source: 'compact', cwd: dir }, dir);
   assert.match(ctx(r), /задача «demo-task»/);
   assert.match(ctx(r), /spec\.md, plan\.md/);
+});
+
+test('session-check: baseline recorded for another commit (on main) -> sync instruction', () => {
+  const dir = h.makeProject();
+  h.state(dir, 'baseline');
+  h.state(dir, 'snapshot');
+  h.write(dir, 'src/extra.js', '//\n');
+  h.git(dir, 'add', 'src/extra.js');
+  h.git(dir, 'commit', '-q', '-m', 'new main commit');
+  const r = h.runScript('session-check.js', { hook_event_name: 'SessionStart', source: 'startup', cwd: dir }, dir);
+  assert.match(ctx(r), /baseline тестов записан для коммита/);
 });

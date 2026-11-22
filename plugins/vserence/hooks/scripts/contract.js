@@ -102,6 +102,15 @@ function staleness(dir) {
   if (cv !== undefined && cv !== L.CONTRACT_VERSION) {
     reasons.push(`версия контракта ${cv} ≠ версии формата плагина ${L.CONTRACT_VERSION}`);
   }
+  // Baseline of the test suite: refreshed by sync when the main branch commit changed, never during a task.
+  const branch = L.currentBranch(dir);
+  if (checks && branch && !branch.startsWith('vserence/') && L.checkCommand(checks, 'test', false)) {
+    const head = (L.git(dir, ['rev-parse', 'HEAD']) || '').trim();
+    if (!checks.baseline) reasons.push('baseline тестов не записан (checks.json → baseline)');
+    else if (head && checks.baseline.commit !== head) {
+      reasons.push(`baseline тестов записан для коммита ${String(checks.baseline.commit).slice(0, 8)}, сейчас ${head.slice(0, 8)}`);
+    }
+  }
   if (!prev) {
     reasons.push('нет .vserence/sync-state.json (снимок прошлой синхронизации)');
     return reasons;

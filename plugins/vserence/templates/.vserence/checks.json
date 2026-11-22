@@ -10,5 +10,11 @@
     "e2e":          { "run": null, "quiet": null },
     "mutation":     { "run": null, "quiet": null }
   },
-  "_doc": "run = обычная команда, quiet = тихий вариант (только ошибки и итог); хуки берут quiet, если он задан. {file} — файл после правки (format, lint в post-edit), {files} — изменённые файлы (test_changed, lint в Stop). null = команды нет: это пишется в отчёте как «не проверено». Пороги скорости: test_changed ≤ 60 с, полный unit ≤ 5 мин."
+  "baseline": {
+    "recorded_at": null,
+    "commit": null,
+    "test_duration_sec": null,
+    "known_failures": []
+  },
+  "_doc": "run = обычная команда, quiet = тихий вариант (только ошибки и итог); хуки берут quiet, если он задан. {file} — файл после правки (format, lint в post-edit), {files} — изменённые файлы (test_changed, lint в Stop). null = команды нет: это пишется в отчёте как «не проверено». Пороги скорости: test_changed ≤ 60 с, полный unit ≤ 5 мин. baseline записывает `vserence-state.js baseline` (онбординг, синхронизация при смене коммита основной ветки, не во время задачи): падения из known_failures не считаются красными, но перечисляются в отчёте как «падали до задачи»."
 }

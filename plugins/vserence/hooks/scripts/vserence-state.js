@@ -14,6 +14,8 @@
 //   node vserence-state.js status                        print state
 //   node vserence-state.js snapshot                      write .vserence/sync-state.json
 //   node vserence-state.js context                       estimate permanent context tokens
+//   node vserence-state.js baseline                      run `test` once, record checks.json → baseline
+//   node vserence-state.js check [test|test_changed|…]   run a check, compare with baseline (exit 2 = red)
 const L = require('./lib.js');
 const C = require('./contract.js');
 
@@ -176,6 +178,58 @@ function main() {
       ok(t.state);
       break;
     }
+    case 'baseline': {
+      // Run the full `test` once and record known failures (onboarding, sync). Never during a task.
+      const t = L.isGitRepo(dir) ? L.activeTask(dir) : null;
+      if (t && t.state.status === 'in_progress') fail('baseline не обновляется во время задачи');
+      const checksPath = L.path.join(L.vserenceDir(dir), 'checks.json');
+      const checks = L.loadChecks(dir);
+      if (!checks) fail('нет .vserence/checks.json');
+      const cmd = L.checkCommand(checks, 'test', false);
+      if (!cmd) fail('нет команды test в checks.json');
+      const B = require('./baseline.js');
+      const r = L.runCommand(cmd, dir, 3600000);
+      const parsed = B.parseFailures(r.out);
+      checks.baseline = {
+        recorded_at: new Date().toISOString(),
+        commit: B.headCommit(dir),
+        test_duration_sec: Math.round(r.seconds),
+        known_failures: r.ok ? [] : parsed.failures,
+      };
+      L.writeJson(checksPath, checks);
+      ok({
+        ...checks.baseline,
+        exit: r.status,
+        format_recognized: parsed.recognized,
+        warning: !r.ok && (!parsed.recognized || parsed.failures.length === 0)
+          ? 'тесты красные, а формат вывода не распознан: known_failures пуст, хуки будут считать красное по коду выхода'
+          : (r.seconds > L.LIMITS.unitSuiteSeconds ? `полный test ${Math.round(r.seconds)} с > ${L.LIMITS.unitSuiteSeconds} с: хуки гоняют только test_changed, полный test один раз перед отчётом` : null),
+      });
+      break;
+    }
+    case 'check': {
+      // Run a checks.json command (e.g. full `test` on verify) and compare with the baseline.
+      const name = a1 || 'test';
+      const checks = L.loadChecks(dir);
+      if (!checks) fail('нет .vserence/checks.json');
+      const cmd = L.checkCommand(checks, name, true);
+      if (!cmd) fail(`нет команды ${name} в checks.json`);
+      const t = L.isGitRepo(dir) ? L.activeTask(dir) : null;
+      const changed = t && t.state.base_sha
+        ? (L.git(dir, ['diff', '--name-only', t.state.base_sha]) || '').split(/\r?\n/).filter(Boolean) : [];
+      const r = L.runCommand(L.fillCommand(cmd, changed) || cmd, dir, 3600000);
+      const cmp = ['test', 'test_changed'].includes(name) && checks.baseline
+        ? require('./baseline.js').compare(checks.baseline, r, changed)
+        : { compared: false, red: !r.ok, new_failures: [], preexisting: [], fixed: [], note: checks.baseline ? '' : 'baseline не записан' };
+      if (t) {
+        t.state.baseline_report = { at: new Date().toISOString(), command: name, ...cmp };
+        L.saveState(t);
+      }
+      process.stdout.write(JSON.stringify({ command: name, exit: r.status, seconds: Math.round(r.seconds), ...cmp,
+        output_tail: L.tail(r.out, 1500) }, null, 2) + '\n');
+      process.exit(cmp.red ? 2 : 0);
+      break;
+    }
     case 'status':
       ok(requireTask(dir).state);
       break;
@@ -186,7 +240,7 @@ function main() {
       ok(C.contextBudget(dir));
       break;
     default:
-      fail('команды: start|stage|escalate|ask|review-fail|incomplete|done|status|snapshot|context');
+      fail('команды: start|stage|escalate|ask|review-fail|incomplete|done|status|snapshot|context|baseline|check');
   }
 }
 

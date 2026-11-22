@@ -207,6 +207,19 @@ function main() {
     if (!cmd) continue; // command needs files and nothing changed
     const timeout = name === 'test_changed' ? 280000 : 180000;
     const r = L.runCommand(cmd, dir, timeout);
+    if (name === 'test_changed' && checks.baseline && !r.timedOut) {
+      const cmp = require('./baseline.js').compare(checks.baseline, r, changed);
+      s.baseline_report = { at: new Date().toISOString(), command: 'test_changed', ...cmp };
+      if (!cmp.red) {
+        if (cmp.preexisting.length) notes.push('падали до задачи (baseline, не красное): ' + cmp.preexisting.join(', '));
+        if (cmp.fixed.length) notes.push('починены тесты из baseline: ' + cmp.fixed.join(', '));
+        continue;
+      }
+      red.push(`${name} (${cmd}) exit ${r.status}` +
+        (cmp.compared ? `, новые падения (нет в baseline): ${cmp.new_failures.join(', ')}` : ` (${cmp.note})`) +
+        `:\n${L.tail(r.out, 1200)}`);
+      continue;
+    }
     if (!r.ok) red.push(`${name} (${cmd}) ${r.timedOut ? 'превысил таймаут' : 'exit ' + r.status}:\n${L.tail(r.out, 1200)}`);
     if (name === 'test_changed' && r.seconds > L.LIMITS.testChangedSeconds) {
       notes.push(`test_changed шёл ${Math.round(r.seconds)} с > ${L.LIMITS.testChangedSeconds} с: нестабильная скорость, отметь в отчёте`);
@@ -233,6 +246,7 @@ function main() {
   }
 
   // Green. Do not let the pipeline end before review and report.
+  if (s.baseline_report) L.saveState(task);
   const report = L.path.join(dir, td, 'report.md');
   const remaining = {
     tests: 'тесты → код → verify (полные test и build один раз, e2e если затронуты критичные пути) → ревью → отчёт',
