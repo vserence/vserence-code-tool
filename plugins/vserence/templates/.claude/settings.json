@@ -1,0 +1,20 @@
+{
+  "extraKnownMarketplaces": {
+    "vserence-code-tool": {
+      "source": {
+        "source": "github",
+        "repo": "OWNER/vserence-code-tool"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "vserence@vserence-code-tool": true,
+    "superpowers@vserence-code-tool": true,
+    "code-review@vserence-code-tool": true,
+    "security-guidance@vserence-code-tool": true,
+    "frontend-design@vserence-code-tool": true
+  },
+  "env": {
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "60"
+  }
+}

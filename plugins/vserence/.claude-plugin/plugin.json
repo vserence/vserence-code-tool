@@ -1,0 +1,12 @@
+{
+  "name": "vserence",
+  "displayName": "vserence-code-tool",
+  "version": "0.1.0",
+  "description": "Turns a plain-text task into a verified result in a separate branch and a plain-language report: router and modes, project contract (.vserence/), hooks with checks, risk analysis, independent review.",
+  "author": {
+    "name": "lumosdev"
+  },
+  "license": "UNLICENSED",
+  "keywords": ["workflow", "testing", "review", "risk", "onboarding"],
+  "dependencies": ["superpowers", "code-review", "security-guidance", "frontend-design"]
+}

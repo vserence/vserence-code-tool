@@ -1,0 +1,14 @@
+{
+  "contract_version": 1,
+  "commands": {
+    "format":       { "run": null, "quiet": null },
+    "lint":         { "run": null, "quiet": null },
+    "typecheck":    { "run": null, "quiet": null },
+    "test":         { "run": null, "quiet": null },
+    "test_changed": { "run": null, "quiet": null },
+    "build":        { "run": null, "quiet": null },
+    "e2e":          { "run": null, "quiet": null },
+    "mutation":     { "run": null, "quiet": null }
+  },
+  "_doc": "run = обычная команда, quiet = тихий вариант (только ошибки и итог); хуки берут quiet, если он задан. {file} — файл после правки (format, lint в post-edit), {files} — изменённые файлы (test_changed, lint в Stop). null = команды нет: это пишется в отчёте как «не проверено». Пороги скорости: test_changed ≤ 60 с, полный unit ≤ 5 мин."
+}

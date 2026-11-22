@@ -1,0 +1,70 @@
+{
+  "name": "vserence-code-tool",
+  "description": "vserence-code-tool: the vserence plugin plus the ready-made plugins it builds on, pinned to commits.",
+  "owner": {
+    "name": "lumosdev"
+  },
+  "plugins": [
+    {
+      "name": "vserence",
+      "source": "./plugins/vserence",
+      "description": "Task → verified result in branch vserence/<task> + report. Router, onboarding, hooks, risk-analyst, reviewer.",
+      "category": "development"
+    },
+    {
+      "name": "superpowers",
+      "source": {
+        "source": "github",
+        "repo": "obra/superpowers"
+      },
+      "description": "Jesse Vincent's Superpowers: writing-plans, test-driven-development, subagent-driven-development, systematic-debugging. Pin: see metadata.pin_commit_sha.",
+      "category": "development",
+      "metadata": {
+        "pin_commit_sha": "PIN_COMMIT_SHA",
+        "todo": "Replace PIN_COMMIT_SHA with a reviewed 40-char commit SHA and move it to source.sha"
+      }
+    },
+    {
+      "name": "code-review",
+      "source": {
+        "source": "git-subdir",
+        "url": "anthropics/claude-plugins-official",
+        "path": "plugins/code-review"
+      },
+      "description": "Anthropic code-review: multi-agent PR review, silent at low confidence. Pin: see metadata.pin_commit_sha.",
+      "category": "development",
+      "metadata": {
+        "pin_commit_sha": "PIN_COMMIT_SHA",
+        "todo": "Replace PIN_COMMIT_SHA with a reviewed 40-char commit SHA and move it to source.sha"
+      }
+    },
+    {
+      "name": "security-guidance",
+      "source": {
+        "source": "git-subdir",
+        "url": "anthropics/claude-plugins-official",
+        "path": "plugins/security-guidance"
+      },
+      "description": "Anthropic security-guidance: security hooks on edits and commits. Pin: see metadata.pin_commit_sha.",
+      "category": "security",
+      "metadata": {
+        "pin_commit_sha": "PIN_COMMIT_SHA",
+        "todo": "Replace PIN_COMMIT_SHA with a reviewed 40-char commit SHA and move it to source.sha"
+      }
+    },
+    {
+      "name": "frontend-design",
+      "source": {
+        "source": "git-subdir",
+        "url": "anthropics/claude-plugins-official",
+        "path": "plugins/frontend-design"
+      },
+      "description": "Anthropic frontend-design: UI standard, used only in interface tasks. Pin: see metadata.pin_commit_sha.",
+      "category": "development",
+      "metadata": {
+        "pin_commit_sha": "PIN_COMMIT_SHA",
+        "todo": "Replace PIN_COMMIT_SHA with a reviewed 40-char commit SHA and move it to source.sha"
+      }
+    }
+  ]
+}
